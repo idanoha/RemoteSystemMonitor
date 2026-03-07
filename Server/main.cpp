@@ -12,10 +12,20 @@ static PDH_HCOUNTER cpuTotal;
 
 /* Creates a PDH query and adds relevant performance counter for monitoring cpu usage
  */
-void initCpuCounter(){
-    PdhOpenQueryW(NULL, 0, &cpuQuery);
-    PdhAddEnglishCounterW(cpuQuery, L"\\Processor(_Total)\\% Processor Time", 0, &cpuTotal);
-    PdhCollectQueryData(cpuQuery);
+void initCpuCounter() {
+    PDH_STATUS openQueryStatus = PdhOpenQueryW(NULL, 0, &cpuQuery);
+    if (openQueryStatus != ERROR_SUCCESS) {
+        std::cout << "PdhOpenQuery failed. Error code: " << openQueryStatus << std::endl;
+    }
+    PDH_STATUS addCounterStatus = PdhAddEnglishCounterW(cpuQuery, L"\\Processor(_Total)\\% Processor Time",
+        0, &cpuTotal);
+    if (addCounterStatus != ERROR_SUCCESS) {
+        std::cout << "PdhAddEnglishCounter failed. Error code: " << addCounterStatus << std::endl;
+    }
+    PDH_STATUS collectDataStatus = PdhCollectQueryData(cpuQuery);
+    if (collectDataStatus != ERROR_SUCCESS) {
+        std::cout << "PdhCollectQueryData failed. Error code: " << collectDataStatus << std::endl;
+    }
 }
 
 /* Samples performance data regarding cpu usage and returning formatted value in percentage
@@ -23,10 +33,19 @@ void initCpuCounter(){
 double getCurrentCPUUsage(){
     PDH_FMT_COUNTERVALUE counterVal;
 
-    PdhCollectQueryData(cpuQuery);
+    PDH_STATUS collectDataStatus = PdhCollectQueryData(cpuQuery);
+    if (collectDataStatus != ERROR_SUCCESS) {
+        std::cout << "PdhCollectQueryData failed. Error code: " << collectDataStatus << std::endl;
+    }
     Sleep(1000);
-    PdhCollectQueryData(cpuQuery);
-    PdhGetFormattedCounterValue(cpuTotal, PDH_FMT_DOUBLE, NULL, &counterVal);
+    collectDataStatus = PdhCollectQueryData(cpuQuery);
+    if (collectDataStatus != ERROR_SUCCESS) {
+        std::cout << "PdhCollectQueryData failed. Error code: " << collectDataStatus << std::endl;
+    }
+    PDH_STATUS getFormattedStatus = PdhGetFormattedCounterValue(cpuTotal, PDH_FMT_DOUBLE, NULL, &counterVal);
+    if (getFormattedStatus != ERROR_SUCCESS) {
+        std::cout << "PdhGetFormattedCounterValue failed. Error code: " << getFormattedStatus << std::endl;
+    }
     return counterVal.doubleValue;
 }
 
