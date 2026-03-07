@@ -24,6 +24,8 @@ double getCurrentCPUUsage(){
     PDH_FMT_COUNTERVALUE counterVal;
 
     PdhCollectQueryData(cpuQuery);
+    Sleep(1000);
+    PdhCollectQueryData(cpuQuery);
     PdhGetFormattedCounterValue(cpuTotal, PDH_FMT_DOUBLE, NULL, &counterVal);
     return counterVal.doubleValue;
 }
@@ -48,15 +50,17 @@ void handleCommand(const std::string& input) {
         } else {
             double availInGB = state.ullAvailPhys / GB_SIZE;
             double totalInGB = state.ullTotalPhys / GB_SIZE;
-            double usedInGB = totalInGB - state.ullAvailPhys / GB_SIZE;
+            double usedInGB = totalInGB - availInGB;
             DWORD percentage = state.dwMemoryLoad;
             std::cout << std::fixed << std::setprecision(1);
-            std:: cout << "RAM In Use: " << usedInGB << " GB / " << totalInGB <<
+            std::cout << "RAM In Use: " << usedInGB << " GB / " << totalInGB <<
                 " GB (" << percentage << "%)" << std::endl;
             std::cout << "RAM Available: " << availInGB << " GB" << std::endl;
         }
     } else if (cmd == "CPU") {
-        std::cout << "CPU Usage: " << getCurrentCPUUsage() << "%" << std::endl;
+        std::cout << "Calculating..." << std::endl;
+        double cpuUsage = getCurrentCPUUsage();
+        std::cout << "CPU Usage: " << cpuUsage << "%" << std::endl;
 
     } else {
         std::cout << "Unknown command: '" << cmd << "'. Try again" << std::endl;
