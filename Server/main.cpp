@@ -15,12 +15,12 @@ static PDH_HCOUNTER cpuTotal;
 void initCpuCounter() {
     PDH_STATUS openQueryStatus = PdhOpenQueryW(NULL, 0, &cpuQuery);
     if (openQueryStatus != ERROR_SUCCESS) {
-        std::cout << "PdhOpenQuery failed. Error code: " << openQueryStatus << std::endl;
+        std::cout << "PdhOpenQuery failed. Error code: " << openQueryStatus << "\n" << std::endl;
     }
     PDH_STATUS addCounterStatus = PdhAddEnglishCounterW(cpuQuery, L"\\Processor(_Total)\\% Processor Time",
         0, &cpuTotal);
     if (addCounterStatus != ERROR_SUCCESS) {
-        std::cout << "PdhAddEnglishCounter failed. Error code: " << addCounterStatus << std::endl;
+        std::cout << "PdhAddEnglishCounter failed. Error code: " << addCounterStatus << "\n" << std::endl;
     }
     PDH_STATUS collectDataStatus = PdhCollectQueryData(cpuQuery);
     if (collectDataStatus != ERROR_SUCCESS) {
@@ -35,37 +35,62 @@ double getCurrentCPUUsage(){
 
     PDH_STATUS collectDataStatus = PdhCollectQueryData(cpuQuery);
     if (collectDataStatus != ERROR_SUCCESS) {
-        std::cout << "PdhCollectQueryData failed. Error code: " << collectDataStatus << std::endl;
+        std::cout << "PdhCollectQueryData failed. Error code: " << collectDataStatus << "\n" << std::endl;
     }
     Sleep(1000);
     collectDataStatus = PdhCollectQueryData(cpuQuery);
     if (collectDataStatus != ERROR_SUCCESS) {
-        std::cout << "PdhCollectQueryData failed. Error code: " << collectDataStatus << std::endl;
+        std::cout << "PdhCollectQueryData failed. Error code: " << collectDataStatus << "\n" << std::endl;
     }
     PDH_STATUS getFormattedStatus = PdhGetFormattedCounterValue(cpuTotal, PDH_FMT_DOUBLE, NULL, &counterVal);
     if (getFormattedStatus != ERROR_SUCCESS) {
-        std::cout << "PdhGetFormattedCounterValue failed. Error code: " << getFormattedStatus << std::endl;
+        std::cout << "PdhGetFormattedCounterValue failed. Error code: " << getFormattedStatus << "\n" << std::endl;
     }
     return counterVal.doubleValue;
 }
 
-void trim(std::string &str) { // Note: also deletes interior whitespaces, could be bad for future commands
-    std::string::iterator end_pos = std::remove(str.begin(), str.end(), ' ');
-    str.erase(end_pos, str.end());
+/* Removes leading and trailing whitespaces from a string
+ */
+void trim(std::string& str) {
+    while (!str.empty() && str.back() == ' ') {
+        str.pop_back();
+    }
+    while (!str.empty() && str.front() == ' ') {
+        str.erase(str.begin(), str.begin() + 1);
+    }
 }
 
 void handleCommand(const std::string& input) {
-    std::string cmd = input;
-    trim(cmd);
-    if (cmd == "EXIT") {
+    std::string trimmedInput(input);
+    trim(trimmedInput);
+    if (trimmedInput.empty()) {
+        return;
+    }
+
+    std::string command, arg1;
+
+    size_t spacePos = trimmedInput.find(' ');
+    if (spacePos != std::string::npos) {
+        command = trimmedInput.substr(0, spacePos);
+        arg1 = trimmedInput.substr(spacePos + 1);
+        trim(arg1);
+    } else {
+        command = trimmedInput;
+    }
+
+    if (command == "EXIT") {
         std::exit(0);
     }
-    if (cmd == "RAM") {
+    else if (command == "RAM") {
+        if (!arg1.empty()) {
+            std::cout << "RAM does not take any parameters. Try again.\n" << std::endl;
+            return;
+        }
         MEMORYSTATUSEX state = {0};
         state.dwLength = sizeof(state);
         if (!GlobalMemoryStatusEx(&state)) {
             DWORD errorCode = GetLastError();
-            std::cout << "Unable to get memory status. Error code:" << errorCode << std::endl;
+            std::cout << "Unable to get memory status. Error code:" << errorCode << "\n" << std::endl;
         } else {
             double availInGB = state.ullAvailPhys / GB_SIZE;
             double totalInGB = state.ullTotalPhys / GB_SIZE;
@@ -74,15 +99,23 @@ void handleCommand(const std::string& input) {
             std::cout << std::fixed << std::setprecision(1);
             std::cout << "RAM In Use: " << usedInGB << " GB / " << totalInGB <<
                 " GB (" << percentage << "%)" << std::endl;
-            std::cout << "RAM Available: " << availInGB << " GB" << std::endl;
+            std::cout << "RAM Available: " << availInGB << " GB\n" << std::endl;
         }
-    } else if (cmd == "CPU") {
+    } else if (command == "CPU") {
+        if (!arg1.empty()) {
+            std::cout << "CPU does not take any parameters. Try again.\n" << std::endl;
+            return;
+        }
         std::cout << "Calculating..." << std::endl;
         double cpuUsage = getCurrentCPUUsage();
-        std::cout << "CPU Usage: " << cpuUsage << "%" << std::endl;
-
+        std::cout << "CPU Usage: " << cpuUsage << "%\n" << std::endl;
+    } else if (command == "DIR") {
+        if (arg1.empty()) {
+            std::cout << "DIR requires a path parameter (e.g., DIR C:\\)\n" << std::endl;
+            return;
+        }
     } else {
-        std::cout << "Unknown command: '" << cmd << "'. Try again" << std::endl;
+        std::cout << "Unknown command: '" << command << "'. Try again\n" << std::endl;
     }
 }
 
