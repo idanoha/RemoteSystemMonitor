@@ -14,7 +14,6 @@ static PDH_HCOUNTER cpuTotal;
  */
 void initCpuCounter(){
     PdhOpenQueryW(NULL, 0, &cpuQuery);
-    // You can also use L"\\Processor(*)\\% Processor Time" and get individual CPU values with PdhGetFormattedCounterArray()
     PdhAddEnglishCounterW(cpuQuery, L"\\Processor(_Total)\\% Processor Time", 0, &cpuTotal);
     PdhCollectQueryData(cpuQuery);
 }
