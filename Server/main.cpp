@@ -28,6 +28,44 @@ void initCpuCounter() {
     }
 }
 
+void listFilesInDir(const std::string& dirPath) {
+    if (dirPath.length() > MAX_PATH - 3) {
+        std::cout << "Directory path is too long.\n" << std::endl;
+        return;
+    }
+    std::string searchPath = dirPath + "\\*";
+    HANDLE hFind = INVALID_HANDLE_VALUE;
+    WIN32_FIND_DATAA findFileData;
+    hFind = FindFirstFileA(searchPath.c_str(), &findFileData);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        std::cout << "Could not open directory or directory is empty. Error: " << GetLastError() << "\n\n";
+        return;
+    }
+
+    do {
+        std::string fileName = findFileData.cFileName;
+        if (fileName == "." || fileName == "..") {
+            continue;
+        }
+
+        if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            std::cout << "[DIR]  " << fileName << std::endl;
+        } else {
+            std::cout << "       " << fileName << std::endl;
+        }
+    } while (FindNextFileA(hFind, &findFileData) != 0);
+
+    DWORD errorCode = GetLastError();
+    if (errorCode != ERROR_NO_MORE_FILES) {
+        std::cout << "FindNextFileA failed. Error code: " << errorCode << "\n\n";
+        FindClose(hFind);
+        return;
+    }
+
+    FindClose(hFind);
+    std::cout << "\n";
+}
+
 /* Samples performance data regarding cpu usage and returning formatted value in percentage
  */
 double getCurrentCPUUsage(){
@@ -114,6 +152,7 @@ void handleCommand(const std::string& input) {
             std::cout << "DIR requires a path parameter (e.g., DIR C:\\)\n" << std::endl;
             return;
         }
+        listFilesInDir(arg1);
     } else {
         std::cout << "Unknown command: '" << command << "'. Try again\n" << std::endl;
     }
