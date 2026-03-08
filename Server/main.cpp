@@ -151,7 +151,7 @@ void trim(std::string& str) {
     while (!str.empty() && (str.back() == ' ' || str.back() == '\n' || str.back() == '\r')) {
         str.pop_back();
     }
-    while (!str.empty() && str.front() == ' ' && str.front() == '\n' && str.front() == '\r') {
+    while (!str.empty() && (str.front() == ' ' || str.front() == '\n' || str.front() == '\r')) {
         str.erase(str.begin(), str.begin() + 1);
     }
 }
@@ -175,10 +175,7 @@ std::string handleCommand(const std::string& input) {
         command = trimmedInput;
     }
 
-    if (command == "EXIT") {
-        std::exit(0);
-    }
-    else if (command == "RAM") {
+    if (command == "RAM") {
         if (!arg1.empty()) {
             msg << "RAM does not take any parameters. Try again.\n" << std::endl;
             return msg.str();
@@ -203,7 +200,6 @@ std::string handleCommand(const std::string& input) {
             msg << "CPU does not take any parameters. Try again.\n" << std::endl;
             return msg.str();
         }
-        msg << "Calculating..." << std::endl;
         double cpuUsage = getCurrentCPUUsage();
         msg << "CPU Usage: " << cpuUsage << "%\n" << std::endl;
     } else if (command == "DIR") {

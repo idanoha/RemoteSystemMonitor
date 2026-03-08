@@ -3,8 +3,8 @@ project(RemoteSystemMonitor)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(RemoteSystemMonitor
-        Client/main.cpp
-        Server/main.cpp)
+add_executable(Server Server/main.cpp)
+target_link_libraries(Server PRIVATE pdh ws2_32)
 
-target_link_libraries(RemoteSystemMonitor pdh ws2_32)
+add_executable(Client Client/main.cpp)
+target_link_libraries(Client PRIVATE ws2_32)
