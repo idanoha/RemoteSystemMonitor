@@ -10,11 +10,21 @@
 #include <sysinfoapi.h>
 #include <iomanip>
 #include <pdh.h>
+#include <sstream>
 #define GB_SIZE (1024.0*1024.0*1024.0)
 #define DEFAULT_PORT 8080
+#define DEFAULT_BUFLEN 4096
 
 static PDH_HQUERY cpuQuery;
 static PDH_HCOUNTER cpuTotal;
+
+SOCKET createListeningSocket(int port);
+void initWinsock();
+void initCpuCounter();
+std::string listFilesInDir(const std::string& dirPath);
+double getCurrentCPUUsage();
+void trim(std::string& str);
+std::string handleCommand(const std::string& input);
 
 SOCKET createListeningSocket(int port) {
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -74,18 +84,19 @@ void initCpuCounter() {
     }
 }
 
-void listFilesInDir(const std::string& dirPath) {
+std::string listFilesInDir(const std::string& dirPath) {
+    std::ostringstream res;
     if (dirPath.length() > MAX_PATH - 3) {
-        std::cout << "Directory path is too long.\n" << std::endl;
-        return;
+        res << "Directory path is too long.\n" << std::endl;
+        return res.str();
     }
     std::string searchPath = dirPath + "\\*";
     HANDLE hFind = INVALID_HANDLE_VALUE;
     WIN32_FIND_DATAA findFileData;
     hFind = FindFirstFileA(searchPath.c_str(), &findFileData);
     if (hFind == INVALID_HANDLE_VALUE) {
-        std::cout << "Could not open directory or directory is empty. Error: " << GetLastError() << "\n\n";
-        return;
+        res << "Could not open directory or directory is empty. Error: " << GetLastError() << "\n\n";
+        return res.str();
     }
 
     do {
@@ -95,9 +106,9 @@ void listFilesInDir(const std::string& dirPath) {
         }
 
         if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            std::cout << "[DIR]  " << fileName << std::endl;
+            res << "[DIR]  " << fileName << std::endl;
         } else {
-            std::cout << "       " << fileName << std::endl;
+            res << "       " << fileName << std::endl;
         }
     } while (FindNextFileA(hFind, &findFileData) != 0);
 
@@ -105,16 +116,17 @@ void listFilesInDir(const std::string& dirPath) {
     if (errorCode != ERROR_NO_MORE_FILES) {
         std::cout << "FindNextFileA failed. Error code: " << errorCode << "\n\n";
         FindClose(hFind);
-        return;
+        return res.str();
     }
 
     FindClose(hFind);
-    std::cout << "\n";
+    res << "\n";
+    return res.str();
 }
 
 /* Samples performance data regarding cpu usage and returning formatted value in percentage
  */
-double getCurrentCPUUsage(){
+double getCurrentCPUUsage() {
     PDH_FMT_COUNTERVALUE counterVal;
 
     PDH_STATUS collectDataStatus = PdhCollectQueryData(cpuQuery);
@@ -136,19 +148,20 @@ double getCurrentCPUUsage(){
 /* Removes leading and trailing whitespaces from a string
  */
 void trim(std::string& str) {
-    while (!str.empty() && str.back() == ' ') {
+    while (!str.empty() && (str.back() == ' ' || str.back() == '\n' || str.back() == '\r')) {
         str.pop_back();
     }
-    while (!str.empty() && str.front() == ' ') {
+    while (!str.empty() && str.front() == ' ' && str.front() == '\n' && str.front() == '\r') {
         str.erase(str.begin(), str.begin() + 1);
     }
 }
 
-void handleCommand(const std::string& input) {
+std::string handleCommand(const std::string& input) {
     std::string trimmedInput(input);
+    std::ostringstream msg;
     trim(trimmedInput);
     if (trimmedInput.empty()) {
-        return;
+        return "No valid command was entered.\n\n";
     }
 
     std::string command, arg1;
@@ -167,70 +180,91 @@ void handleCommand(const std::string& input) {
     }
     else if (command == "RAM") {
         if (!arg1.empty()) {
-            std::cout << "RAM does not take any parameters. Try again.\n" << std::endl;
-            return;
+            msg << "RAM does not take any parameters. Try again.\n" << std::endl;
+            return msg.str();
         }
         MEMORYSTATUSEX state = {0};
         state.dwLength = sizeof(state);
         if (!GlobalMemoryStatusEx(&state)) {
             DWORD errorCode = GetLastError();
-            std::cout << "Unable to get memory status. Error code:" << errorCode << "\n" << std::endl;
+            msg << "Unable to get memory status. Error code:" << errorCode << "\n" << std::endl;
         } else {
             double availInGB = state.ullAvailPhys / GB_SIZE;
             double totalInGB = state.ullTotalPhys / GB_SIZE;
             double usedInGB = totalInGB - availInGB;
             DWORD percentage = state.dwMemoryLoad;
-            std::cout << std::fixed << std::setprecision(1);
-            std::cout << "RAM In Use: " << usedInGB << " GB / " << totalInGB <<
+            msg << std::fixed << std::setprecision(1);
+            msg << "RAM In Use: " << usedInGB << " GB / " << totalInGB <<
                 " GB (" << percentage << "%)" << std::endl;
-            std::cout << "RAM Available: " << availInGB << " GB\n" << std::endl;
+            msg << "RAM Available: " << availInGB << " GB\n" << std::endl;
         }
     } else if (command == "CPU") {
         if (!arg1.empty()) {
-            std::cout << "CPU does not take any parameters. Try again.\n" << std::endl;
-            return;
+            msg << "CPU does not take any parameters. Try again.\n" << std::endl;
+            return msg.str();
         }
-        std::cout << "Calculating..." << std::endl;
+        msg << "Calculating..." << std::endl;
         double cpuUsage = getCurrentCPUUsage();
-        std::cout << "CPU Usage: " << cpuUsage << "%\n" << std::endl;
+        msg << "CPU Usage: " << cpuUsage << "%\n" << std::endl;
     } else if (command == "DIR") {
         if (arg1.empty()) {
-            std::cout << "DIR requires a path parameter (e.g., DIR C:\\)\n" << std::endl;
-            return;
+            msg << "DIR requires a path parameter (e.g., DIR C:\\)\n" << std::endl;
+            return msg.str();
         }
-        listFilesInDir(arg1);
+        msg << listFilesInDir(arg1);
     } else {
-        std::cout << "Unknown command: '" << command << "'. Try again\n" << std::endl;
+        msg << "Unknown command: '" << command << "'. Try again\n" << std::endl;
     }
+    return msg.str();
 }
 
 int main() {
     initCpuCounter();
     initWinsock();
-    std::string command;
 
     SOCKET serverSocket = createListeningSocket(DEFAULT_PORT);
 
-    sockaddr_in clientAddr;
-    int clientAddrSize = sizeof(clientAddr);
-    SOCKET clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrSize);
-
-    if (clientSocket == INVALID_SOCKET) {
-        std::cout << "Accept failed. Error code: " << WSAGetLastError() << "\n\n";
-        closesocket(serverSocket);
-        WSACleanup();
-        return 1;
-    }
-
-    std::cout << "Client connected!\n";
-
     while (true) {
-        std::cout << "Monitor> ";
-        getline(std::cin, command);
-        handleCommand(command);
+        sockaddr_in clientAddr;
+        int clientAddrSize = sizeof(clientAddr);
+        std::cout << "Waiting for a connection...\n" << std::endl;
+        SOCKET clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrSize);
+
+        if (clientSocket == INVALID_SOCKET) {
+            std::cout << "Accept failed. Error code: " << WSAGetLastError() << "\n\n";
+            continue;
+        }
+
+        std::cout << "Client connected!\n";
+
+        char recvbuf[DEFAULT_BUFLEN];
+        int recvbuflen = DEFAULT_BUFLEN;
+
+
+        while (true) {
+            ZeroMemory(recvbuf, recvbuflen);
+
+            int bytesReceived = recv(clientSocket, recvbuf, recvbuflen, 0);
+            if (bytesReceived > 0) {
+                std::string command(recvbuf, bytesReceived);
+                std::cout << "[CLIENT]: " << command << "\n\n";
+                std::string msg = handleCommand(command);
+                int bytesSent = send(clientSocket, msg.c_str(), msg.length(), 0);
+                if (bytesSent == SOCKET_ERROR) {
+                    std::cout << "Send failed. Error code: " << WSAGetLastError() << "\n\n";
+                    break;
+                }
+            } else if (bytesReceived == 0) {
+                std::cout << "Client closed the connection.\n\n";
+                break;
+            } else {
+                std::cout << "recv failed. Error code: " << WSAGetLastError() << "\n\n";
+                break;
+            }
+        }
+        closesocket(clientSocket);
     }
 
-    closesocket(clientSocket);
     closesocket(serverSocket);
     WSACleanup();
     return 0;
