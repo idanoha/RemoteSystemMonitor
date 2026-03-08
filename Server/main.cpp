@@ -9,14 +9,17 @@
 #include <windows.h>
 #include <sysinfoapi.h>
 #include <iomanip>
+#include <mutex>
 #include <pdh.h>
 #include <sstream>
+#include <thread>
 #define GB_SIZE (1024.0*1024.0*1024.0)
 #define DEFAULT_PORT 8080
 #define DEFAULT_BUFLEN 4096
 
 static PDH_HQUERY cpuQuery;
 static PDH_HCOUNTER cpuTotal;
+static std::mutex cpuMutex;
 
 SOCKET createListeningSocket(int port);
 void initWinsock();
@@ -25,6 +28,7 @@ std::string listFilesInDir(const std::string& dirPath);
 double getCurrentCPUUsage();
 void trim(std::string& str);
 std::string handleCommand(const std::string& input);
+void handleClientConnection(SOCKET clientSocket);
 
 SOCKET createListeningSocket(int port) {
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -127,6 +131,7 @@ std::string listFilesInDir(const std::string& dirPath) {
 /* Samples performance data regarding cpu usage and returning formatted value in percentage
  */
 double getCurrentCPUUsage() {
+    std::lock_guard<std::mutex> lock(cpuMutex);
     PDH_FMT_COUNTERVALUE counterVal;
 
     PDH_STATUS collectDataStatus = PdhCollectQueryData(cpuQuery);
@@ -214,6 +219,35 @@ std::string handleCommand(const std::string& input) {
     return msg.str();
 }
 
+void handleClientConnection(SOCKET clientSocket) {
+    char recvbuf[DEFAULT_BUFLEN];
+    int recvbuflen = DEFAULT_BUFLEN;
+
+
+    while (true) {
+        ZeroMemory(recvbuf, recvbuflen);
+
+        int bytesReceived = recv(clientSocket, recvbuf, recvbuflen, 0);
+        if (bytesReceived > 0) {
+            std::string command(recvbuf, bytesReceived);
+            std::cout << "[CLIENT]: " << command << "\n\n";
+            std::string msg = handleCommand(command);
+            int bytesSent = send(clientSocket, msg.c_str(), msg.length(), 0);
+            if (bytesSent == SOCKET_ERROR) {
+                std::cout << "Send failed. Error code: " << WSAGetLastError() << "\n\n";
+                break;
+            }
+        } else if (bytesReceived == 0) {
+            std::cout << "Client closed the connection.\n\n";
+            break;
+        } else {
+            std::cout << "recv failed. Error code: " << WSAGetLastError() << "\n\n";
+            break;
+        }
+    }
+    closesocket(clientSocket);
+}
+
 int main() {
     initCpuCounter();
     initWinsock();
@@ -233,32 +267,10 @@ int main() {
 
         std::cout << "Client connected!\n";
 
-        char recvbuf[DEFAULT_BUFLEN];
-        int recvbuflen = DEFAULT_BUFLEN;
+        std::thread t(handleClientConnection, clientSocket);
+        t.detach();
 
 
-        while (true) {
-            ZeroMemory(recvbuf, recvbuflen);
-
-            int bytesReceived = recv(clientSocket, recvbuf, recvbuflen, 0);
-            if (bytesReceived > 0) {
-                std::string command(recvbuf, bytesReceived);
-                std::cout << "[CLIENT]: " << command << "\n\n";
-                std::string msg = handleCommand(command);
-                int bytesSent = send(clientSocket, msg.c_str(), msg.length(), 0);
-                if (bytesSent == SOCKET_ERROR) {
-                    std::cout << "Send failed. Error code: " << WSAGetLastError() << "\n\n";
-                    break;
-                }
-            } else if (bytesReceived == 0) {
-                std::cout << "Client closed the connection.\n\n";
-                break;
-            } else {
-                std::cout << "recv failed. Error code: " << WSAGetLastError() << "\n\n";
-                break;
-            }
-        }
-        closesocket(clientSocket);
     }
 
     closesocket(serverSocket);
