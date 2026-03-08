@@ -7,4 +7,4 @@ add_executable(RemoteSystemMonitor
         Client/main.cpp
         Server/main.cpp)
 
-target_link_libraries(RemoteSystemMonitor pdh)
+target_link_libraries(RemoteSystemMonitor pdh ws2_32)

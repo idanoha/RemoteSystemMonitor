@@ -1,14 +1,60 @@
+#ifndef WIN32_LEAN_AND_MEAN // windows.h includes old winsock. to avoid conflicts with winsock2, this define is added.
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <algorithm>
 #include <iostream>
 #include <string>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <sysinfoapi.h>
 #include <iomanip>
 #include <pdh.h>
 #define GB_SIZE (1024.0*1024.0*1024.0)
+#define DEFAULT_PORT 8080
 
 static PDH_HQUERY cpuQuery;
 static PDH_HCOUNTER cpuTotal;
+
+SOCKET createListeningSocket(int port) {
+    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (serverSocket == INVALID_SOCKET) {
+        std::cout << "Could not create socket. Error code: " << WSAGetLastError() << "\n\n";
+        WSACleanup();
+        std::exit(1);
+    }
+
+    sockaddr_in serverAddr = {};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(DEFAULT_PORT);
+
+    if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        std::cout << "Bind failed. Error: " << WSAGetLastError() << "\n\n";
+        closesocket(serverSocket);
+        WSACleanup();
+        std::exit(1);
+    }
+
+    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
+        std::cout << "Listen failed. Error code: " << WSAGetLastError() << "\n\n";
+        closesocket(serverSocket);
+        WSACleanup();
+        std::exit(1);
+    }
+
+    std::cout << "Server is listening on port 8080...\n\n";
+    return serverSocket;
+}
+
+void initWinsock() {
+    WSADATA wsaData;
+    int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != 0) {
+        std::cout << "WSAStartup failed. Error code: " << iResult << "\n\n";
+        std::exit(1);
+    }
+}
 
 /* Creates a PDH query and adds relevant performance counter for monitoring cpu usage
  */
@@ -160,12 +206,32 @@ void handleCommand(const std::string& input) {
 
 int main() {
     initCpuCounter();
+    initWinsock();
     std::string command;
+
+    SOCKET serverSocket = createListeningSocket(DEFAULT_PORT);
+
+    sockaddr_in clientAddr;
+    int clientAddrSize = sizeof(clientAddr);
+    SOCKET clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrSize);
+
+    if (clientSocket == INVALID_SOCKET) {
+        std::cout << "Accept failed. Error code: " << WSAGetLastError() << "\n\n";
+        closesocket(serverSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    std::cout << "Client connected!\n";
 
     while (true) {
         std::cout << "Monitor> ";
         getline(std::cin, command);
         handleCommand(command);
     }
+
+    closesocket(clientSocket);
+    closesocket(serverSocket);
+    WSACleanup();
     return 0;
 }
