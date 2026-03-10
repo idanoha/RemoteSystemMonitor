@@ -18,7 +18,7 @@ SOCKET connectToServer();
 bool sendMessage(SOCKET clientSocket, const std::string& message);
 bool sendAll(SOCKET clientSocket, const char* buf, int length);
 bool recvMessage(SOCKET clientSocket);
-bool recvAll(SOCKET clientSocket, char* buf, uint32_t length);
+bool recvAll(SOCKET clientSocket, char* buf, int length);
 
 SOCKET connectToServer() {
     SOCKET connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);

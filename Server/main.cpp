@@ -300,7 +300,7 @@ void handleClientConnection(SOCKET clientSocket) {
     while (true) {
         std::string command;
         if (!recvMessage(clientSocket, command)) {
-            std::cout << "Receiving failed. Error code: " << WSAGetLastError() << "\n\n";
+            std::cout << "Client disconnected or recv failed.\n\n";
             break;
         }
 
