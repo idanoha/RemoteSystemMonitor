@@ -37,6 +37,7 @@ bool sendAll(SOCKET clientSocket, const char* buf, int length);
 bool recvMessage(SOCKET clientSocket);
 bool recvAll(SOCKET clientSocket, char* buf, int length);
 std::string listProcesses();
+bool killProcess(int pid);
 
 SOCKET createListeningSocket(int port) {
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -203,6 +204,19 @@ void trim(std::string& str) {
     }
 }
 
+bool killProcess(int pid) {
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+    if (hProcess == NULL) {
+        return false;
+    }
+    if (TerminateProcess(hProcess, 0) == 0) {
+        CloseHandle(hProcess);
+        return false;
+    }
+    CloseHandle(hProcess);
+    return true;
+}
+
 std::string handleCommand(const std::string& input) {
     std::string trimmedInput(input);
     std::ostringstream msg;
@@ -261,6 +275,22 @@ std::string handleCommand(const std::string& input) {
             return msg.str();
         }
         msg << listProcesses();
+    } else if (command == "KILL") {
+        if (arg1.empty()) {
+            msg << "KILL requires a process id (e.g., KILL 1234)\n" << std::endl;
+            return msg.str();
+        }
+        try {
+            int pid = std::stoi(arg1);
+            if (!killProcess(pid)) {
+                msg << "Couldn't terminate process.\n" << std::endl;
+                return msg.str();
+            }
+            msg << "Process " << pid << " terminated successfully.\n\n";
+        } catch (const std::exception& ex) {
+            msg << "Invalid pid. Try again\n" << std::endl;
+            return msg.str();
+        }
     } else {
         msg << "Unknown command: '" << command << "'. Try again\n" << std::endl;
     }
