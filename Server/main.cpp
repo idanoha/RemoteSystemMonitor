@@ -34,7 +34,7 @@ void handleClientConnection(SOCKET clientSocket);
 bool sendMessage(SOCKET clientSocket, const std::string& message);
 bool sendAll(SOCKET clientSocket, const char* buf, int length);
 bool recvMessage(SOCKET clientSocket);
-bool recvAll(SOCKET clientSocket, char* buf, uint32_t length);
+bool recvAll(SOCKET clientSocket, char* buf, int length);
 
 SOCKET createListeningSocket(int port) {
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -300,7 +300,7 @@ void handleClientConnection(SOCKET clientSocket) {
     while (true) {
         std::string command;
         if (!recvMessage(clientSocket, command)) {
-            std::cout << "recv failed. Error code: " << WSAGetLastError() << "\n\n";
+            std::cout << "Receiving failed. Error code: " << WSAGetLastError() << "\n\n";
             break;
         }
 
