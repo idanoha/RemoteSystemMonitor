@@ -17,6 +17,8 @@
 #define DEFAULT_PORT 8080
 #define DEFAULT_BUFLEN 4096
 
+const uint32_t MAX_MESSAGE_SIZE = 1024*1024;
+
 static PDH_HQUERY cpuQuery;
 static PDH_HCOUNTER cpuTotal;
 static std::mutex cpuMutex;
@@ -29,6 +31,10 @@ double getCurrentCPUUsage();
 void trim(std::string& str);
 std::string handleCommand(const std::string& input);
 void handleClientConnection(SOCKET clientSocket);
+bool sendMessage(SOCKET clientSocket, const std::string& message);
+bool sendAll(SOCKET clientSocket, const char* buf, int length);
+bool recvMessage(SOCKET clientSocket);
+bool recvAll(SOCKET clientSocket, char* buf, uint32_t length);
 
 SOCKET createListeningSocket(int port) {
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -217,6 +223,77 @@ std::string handleCommand(const std::string& input) {
         msg << "Unknown command: '" << command << "'. Try again\n" << std::endl;
     }
     return msg.str();
+}
+
+bool sendAll(SOCKET clientSocket, const char* buf, int length) {
+    int totalSent = 0;
+    while (totalSent < length) {
+        int sent = send(clientSocket, buf + totalSent, length - totalSent, 0);
+        if (sent <= 0) {
+            return false;
+        }
+        totalSent += sent;
+    }
+    return true;
+}
+
+/* Sends a message. first 4 bytes sent are the message length, then the actual message is sent.
+ */
+bool sendMessage(SOCKET clientSocket, const std::string& message) {
+    if (message.length() > UINT32_MAX) { // message.length is up to 64 bits so we can't send messages that are too large
+        return false;
+    }
+
+    // converting length to network byte order (big endian) before sending
+    uint32_t messageLength = htonl(static_cast<uint32_t>(message.length()));
+
+    if (!sendAll(clientSocket, reinterpret_cast<const char *>(&messageLength), sizeof(messageLength))) {
+        return false;
+    }
+    if (!sendAll(clientSocket, message.data(), static_cast<int>(message.length()))) {
+        return false;
+    }
+    return true;
+}
+
+/* Receives a message: first 4 bytes are the length, then the actual message is written into the message variable.
+ */
+bool recvMessage(SOCKET clientSocket, std::string& message) {
+    uint32_t messageLength = 0;
+    if (!recvAll(clientSocket, reinterpret_cast<char *>(&messageLength), sizeof(messageLength))) {
+        return false;
+    }
+
+    // converting from network byte order to host byte order to get correct value of message length
+    messageLength = ntohl(messageLength);
+
+    if (messageLength > MAX_MESSAGE_SIZE) { // allow up to some maximum reasonable size to avoid huge memory allocation
+        return false;
+    }
+
+    message.resize(messageLength);
+
+    if (messageLength == 0) { // received empty message
+        return true;
+    }
+
+    if (!recvAll(clientSocket, message.data(), static_cast<int>(messageLength))) {
+        return false;
+    }
+
+    return true;
+}
+
+bool recvAll(SOCKET clientSocket, char* buf, int length) {
+    int totalReceived = 0;
+    while (totalReceived < length) {
+        int bytesReceived = recv(clientSocket, buf + totalReceived, length - totalReceived, 0);
+        if (bytesReceived <= 0) {
+            return false;
+        }
+        totalReceived += bytesReceived;
+    }
+    return true;
 }
 
 void handleClientConnection(SOCKET clientSocket) {
