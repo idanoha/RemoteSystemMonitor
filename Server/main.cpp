@@ -13,6 +13,7 @@
 #include <pdh.h>
 #include <sstream>
 #include <thread>
+#include <tlhelp32.h>
 #define GB_SIZE (1024.0*1024.0*1024.0)
 #define DEFAULT_PORT 8080
 #define DEFAULT_BUFLEN 4096
@@ -35,6 +36,7 @@ bool sendMessage(SOCKET clientSocket, const std::string& message);
 bool sendAll(SOCKET clientSocket, const char* buf, int length);
 bool recvMessage(SOCKET clientSocket);
 bool recvAll(SOCKET clientSocket, char* buf, int length);
+std::string listProcesses();
 
 SOCKET createListeningSocket(int port) {
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -92,6 +94,40 @@ void initCpuCounter() {
     if (collectDataStatus != ERROR_SUCCESS) {
         std::cout << "PdhCollectQueryData failed. Error code: " << collectDataStatus << std::endl;
     }
+}
+
+std::string listProcesses() {
+    std::ostringstream res;
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnapshot == INVALID_HANDLE_VALUE) {
+        std::cout << "CreateToolhelp32Snapshot() failed. Error code: " << GetLastError() << "\n\n";
+        return "";
+    }
+    res << "PID      NAME" << std::endl;
+    res << "-------------------------------" << std::endl;
+    PROCESSENTRY32 processEntryData = {};
+    processEntryData.dwSize = sizeof(processEntryData);
+    if (!Process32First(hSnapshot, &processEntryData)) {
+        std::cout << "Process32First failed. Error code: " << GetLastError() << "\n\n";
+        CloseHandle(hSnapshot);
+        return "";
+    }
+    do {
+        std::string processName = processEntryData.szExeFile;
+        int pid = static_cast<int>(processEntryData.th32ProcessID);
+
+        res << std::left << std::setw(10) << pid << processName << "\n";
+    } while (Process32Next(hSnapshot, &processEntryData) != 0);
+
+    DWORD errorCode = GetLastError();
+    if (errorCode != ERROR_NO_MORE_FILES) {
+        std::cout << "Process32Next failed. Error code: " << errorCode << "\n\n";
+        CloseHandle(hSnapshot);
+        return res.str();
+    }
+    res << "\n";
+    CloseHandle(hSnapshot);
+    return res.str();
 }
 
 std::string listFilesInDir(const std::string& dirPath) {
@@ -219,6 +255,12 @@ std::string handleCommand(const std::string& input) {
             return msg.str();
         }
         msg << listFilesInDir(arg1);
+    } else if (command == "LIST") {
+        if (!arg1.empty()) {
+            msg << "LIST does not take any parameters. Try again.\n" << std::endl;
+            return msg.str();
+        }
+        msg << listProcesses();
     } else {
         msg << "Unknown command: '" << command << "'. Try again\n" << std::endl;
     }
