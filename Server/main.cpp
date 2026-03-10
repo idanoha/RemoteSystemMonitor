@@ -297,28 +297,18 @@ bool recvAll(SOCKET clientSocket, char* buf, int length) {
 }
 
 void handleClientConnection(SOCKET clientSocket) {
-    char recvbuf[DEFAULT_BUFLEN];
-    int recvbuflen = DEFAULT_BUFLEN;
-
-
     while (true) {
-        ZeroMemory(recvbuf, recvbuflen);
-
-        int bytesReceived = recv(clientSocket, recvbuf, recvbuflen, 0);
-        if (bytesReceived > 0) {
-            std::string command(recvbuf, bytesReceived);
-            std::cout << "[CLIENT]: " << command << "\n\n";
-            std::string msg = handleCommand(command);
-            int bytesSent = send(clientSocket, msg.c_str(), msg.length(), 0);
-            if (bytesSent == SOCKET_ERROR) {
-                std::cout << "Send failed. Error code: " << WSAGetLastError() << "\n\n";
-                break;
-            }
-        } else if (bytesReceived == 0) {
-            std::cout << "Client closed the connection.\n\n";
-            break;
-        } else {
+        std::string command;
+        if (!recvMessage(clientSocket, command)) {
             std::cout << "recv failed. Error code: " << WSAGetLastError() << "\n\n";
+            break;
+        }
+
+        std::cout << "[CLIENT]: " << command << "\n\n";
+
+        std::string msg = handleCommand(command);
+        if (!sendMessage(clientSocket, msg)) {
+            std::cout << "Send failed. Error code: " << WSAGetLastError() << "\n\n";
             break;
         }
     }
@@ -332,7 +322,7 @@ int main() {
     SOCKET serverSocket = createListeningSocket(DEFAULT_PORT);
 
     while (true) {
-        sockaddr_in clientAddr;
+        sockaddr_in clientAddr = {};
         int clientAddrSize = sizeof(clientAddr);
         std::cout << "Waiting for a connection...\n" << std::endl;
         SOCKET clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrSize);
